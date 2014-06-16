@@ -588,14 +588,14 @@ namespace StochSyst {
             //}
 
             {//7.2a
-                int[] css = { 2,5,10 };
+                int[] css = { 2, 5, 10 };
                 foreach(var c in css)
-                    //geneticSwitch(c, 1, 1, 50000, true, false);
-                ;
+                    geneticSwitch(c, 1, 1, 500, true, false);
+                    ;
                 int[] cs = { 2, 5, 10 };
                 foreach(var c in cs)
-                    geneticSwitch(c, 0.5, 1, 1, false, false);
-                    ;
+                   // geneticSwitch2(c, 1, 10000000, 300, false, false);
+                ;
 
             }
         }
@@ -782,7 +782,89 @@ namespace StochSyst {
                 }
             }
         }
+        private void geneticSwitch2(int c, double k, int N, double starttime, bool detailedpath, bool verydetail) {
+            rwplot = rwplot ?? new RandomWalkPlot(window.Plot1, "Kinetic Monte Carlo", "Genetic switch k=" + k + "; c=" + c + "; " + N + " Steps" + (N > 1 ? "ies" : "y") + "; warmup time = " + starttime);
+            int nA = 0, nB = 0, nA2 = 0, nB2 = 0;
+            bool logging = false;
+            double time = 0;
+            oState state = oState.e;
+            rwplot.SetAxisTitles("λ", "p(λ)");
 
+            int[] lambda = new int[N];
+            int s = 0;
+            while(s < N) {
+                var rates = getRates(nA, nA2, nB, nB2, state, c, k);
+                double rand = rng.NextDouble() * rates[11];
+                int actindex = 0;
+                double comp = rates[0];
+                while(rand > comp) {
+                    actindex++;
+                    comp += rates[actindex];
+                }
+                double dt = expverteilung(rates[11]);
+
+                oAction todo = actions[actindex];
+                if(state == oState.e && todo == oAction.uC)
+                    Console.WriteLine("LOLWTF");
+                if(state == oState.A && todo == oAction.pB)
+                    Console.WriteLine("LOLWTF");
+                if(state == oState.B && todo == oAction.pA)
+                    Console.WriteLine("LOLWTF");
+                if(state != oState.e && (todo == oAction.cB || todo == oAction.cA))
+                    Console.WriteLine("LOLWTF");
+                if(nA == 0 && (todo == oAction.mA || todo == oAction.pA2))
+                    Console.WriteLine("LOLWTF");
+                if(nB == 0 && (todo == oAction.mB || todo == oAction.pB2))
+                    Console.WriteLine("LOLWTF");
+                if(nA2 == 0 && (todo == oAction.mA2 || todo == oAction.cA))
+                    Console.WriteLine("LOLWTF");
+                if(nB2 == 0 && (todo == oAction.mB2 || todo == oAction.cB))
+                    Console.WriteLine("LOLWTF");
+
+                time += dt;
+                switch(actions[actindex]) {
+                    case oAction.pA: nA++; break;
+                    case oAction.pB: nB++; break;
+                    case oAction.cA: state = oState.A; nA2 -= 1; break;
+                    case oAction.cB: state = oState.B; nB2 -= 1; break;
+                    case oAction.uC:
+                        if(state == oState.A)
+                            nA2 += 1;
+                        else
+                            nB2 += 1;
+                        state = oState.e;
+                        break;
+                    case oAction.mA: nA--; break;
+                    case oAction.mB: nB--; break;
+                    case oAction.pA2: nA2++; nA -= 2; break;
+                    case oAction.pB2: nB2++; nB -= 2; break;
+                    case oAction.mA2: nA2--; nA += 2; break;
+                    case oAction.mB2: nB2--; nB += 2; break;
+                }
+                if(!logging && time > starttime) {
+                    logging = true;
+                }
+                if(logging) {
+                    lambda[s++] = (nA + 2 * nA2) - (nB + 2 * nB2);
+                }
+                if(s % 1000000 == 0) {
+                    Console.WriteLine(s * 0.000001);
+                }
+                if(nA < 0 || nB < 0)
+                    Console.WriteLine("LOLWTF");
+            }
+            LineSeries pLambda = rwplot.AddLineM("λ, c = " + c, OxyColors.Automatic);
+            Array.Sort(lambda);
+            for(int i = 0; i < N - 2;) {
+                int j = 0;
+                while(i + j + 1 < N && lambda[i] == lambda[i + j + 1]) {
+                    j++;
+                }
+                double n = j;
+                pLambda.Points.Add(new DataPoint(lambda[i], n / N));
+                i = i + j + 1;
+            }
+        }
         private double[] getRates(int na, int na2, int nb, int nb2, oState state, int c, double k) {
             double[] rates = { 
                                  k, //pA 0
